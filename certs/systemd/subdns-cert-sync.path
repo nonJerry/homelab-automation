@@ -1,0 +1,7 @@
+[Unit]
+Description=Watch the shared wildcard cert for renewal
+[Path]
+PathChanged=/etc/pki/tls/certs/fullchain.pem
+Unit=subdns-cert-sync.service
+[Install]
+WantedBy=paths.target

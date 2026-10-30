@@ -1,0 +1,5 @@
+[Unit]
+Description=Copy renewed wildcard cert into the subdns DoT stack
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/refresh-dot-cert.sh --refresh

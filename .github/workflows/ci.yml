@@ -1,0 +1,23 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        run: |
+          grep -rlE '^#!.*\b(ba)?sh\b' --exclude-dir=.git . \
+            | xargs shellcheck --severity=warning
+
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash boot/test.sh
+      - run: sh network/test.sh
+      - run: bash monitoring/test-mail-watch.sh

@@ -1,0 +1,49 @@
+#!/bin/sh
+# Restarts Wi-Fi when an AP interface sits in a bridge newer than itself:
+# hostapd's FT/RRB socket then still points at the dead bridge ifindex (ENXIO).
+NET=${NET:-/sys/class/net}
+LOCK=${LOCK:-/var/lock/wifi-bridge-guard.lock}
+TAG=wifi-bridge-guard
+
+# Prints "<ap> <bridge>" for every AP interface whose bridge is newer than it.
+stale() {
+	for ap in "$NET"/phy*-ap*; do
+		[ -e "$ap/master" ] || continue
+		br=$(readlink -f "$ap/master")
+		[ "$(cat "$br/ifindex")" -gt "$(cat "$ap/ifindex")" ] && echo "${ap##*/} ${br##*/}"
+	done
+	return 0
+}
+
+fix() {
+	exec 9>"$LOCK"
+	flock -n 9 || exit 0
+	[ -n "$(stale)" ] || exit 0
+	# netifd may still be re-attaching after a UI apply; only act if it persists
+	sleep 10
+	found=$(stale | tr '\n' ' ')
+	[ -n "$found" ] || exit 0
+	logger -t "$TAG" "stale bridge binding: $found- restarting wifi"
+	wifi down
+	sleep 8
+	wifi up
+	sleep 15
+	left=$(stale | tr '\n' ' ')
+	if [ -n "$left" ]; then
+		logger -p daemon.err -t "$TAG" "still stale after restart: $left"
+	else
+		logger -t "$TAG" "wifi restarted, bridge bindings ok"
+	fi
+}
+
+case "$1" in
+	check)
+		found=$(stale)
+		[ -z "$found" ] && { echo ok; exit 0; }
+		echo "$found"
+		exit 1
+		;;
+	fix) fix ;;
+	delayed) sleep 20; fix ;;
+	*) echo "usage: $0 check|fix|delayed" >&2; exit 2 ;;
+esac

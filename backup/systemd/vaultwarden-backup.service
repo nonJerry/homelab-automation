@@ -1,0 +1,9 @@
+[Unit]
+Description=Vaultwarden backup (encrypted)
+RequiresMountsFor=/srv/data
+After=user@1007.service
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/usr/local/sbin/vw-backup.sh

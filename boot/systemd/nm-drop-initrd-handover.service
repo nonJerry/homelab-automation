@@ -1,0 +1,14 @@
+[Unit]
+Description=Drop initrd network handover so the persistent eno1 profile activates
+DefaultDependencies=no
+Before=NetworkManager.service
+ConditionPathExists=/run/NetworkManager/initrd
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/rm -f /run/NetworkManager/system-connections/eno1.nmconnection
+ExecStart=/usr/bin/sh -c 'rm -f /run/NetworkManager/devices/*'
+
+[Install]
+WantedBy=NetworkManager.service

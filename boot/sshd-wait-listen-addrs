@@ -1,0 +1,24 @@
+#!/bin/bash
+# Waits until every sshd ListenAddress is assigned and past DAD; sshd would otherwise start v4-only or not at all.
+set -u
+
+listen_addrs() {
+    awk '$1 == "listenaddress" {
+        a = $2; sub(/:[0-9]+$/, "", a); gsub(/[][]/, "", a)
+        if (a != "0.0.0.0" && a != "::") print a
+    }'
+}
+
+[[ ${1:-} == --parse ]] && { listen_addrs; exit; }
+
+mapfile -t addrs < <(/usr/sbin/sshd -T "$@" | listen_addrs)
+for _ in $(seq 120); do
+    missing=()
+    for a in "${addrs[@]}"; do
+        [[ -n $(ip -o addr show to "$a" -tentative) ]] || missing+=("$a")
+    done
+    (( ${#missing[@]} == 0 )) && exit 0
+    sleep 0.5
+done
+echo "sshd listen addresses not ready after 60 s: ${missing[*]}" >&2
+exit 1

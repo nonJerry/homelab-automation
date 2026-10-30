@@ -1,0 +1,5 @@
+#!/bin/sh
+# /etc/hotplug.d/net: a (re)created bridge may have orphaned hostapd's RRB socket.
+[ "$ACTION" = add ] && [ -d "/sys/class/net/$INTERFACE/bridge" ] || exit 0
+logger -t wifi-bridge-guard "bridge $INTERFACE created, checking in 20 s"
+setsid /usr/sbin/wifi-bridge-guard delayed >/dev/null 2>&1 </dev/null &

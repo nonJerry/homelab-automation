@@ -1,0 +1,9 @@
+[Unit]
+Description=grocy backup
+RequiresMountsFor=/srv/data
+After=user@1008.service
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/usr/local/sbin/grocy-backup.sh

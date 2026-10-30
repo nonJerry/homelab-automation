@@ -1,0 +1,13 @@
+#!/bin/sh
+# Weekly re-sign of the internal example.org zone; ldns-signzone signatures expire after 4 weeks.
+set -eu
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ZONES=/usr/local/etc/unbound/zones
+SIGNED=$ZONES/example.org.zone.signed
+
+runuser -u unbound -- "$ZONES/sign_zone.sh"
+ldns-verify-zone "$SIGNED" >/dev/null
+systemctl reload unbound
+runuser -u certmgr -- /opt/cert-utils/push-zone.sh
+
+echo "zone-resign: OK, signatures valid until $(awk '$4 == "RRSIG" && $5 == "SOA" {print $9; exit}' "$SIGNED")"

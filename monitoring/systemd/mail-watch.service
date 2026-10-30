@@ -1,0 +1,11 @@
+[Unit]
+Description=Probe the mail path and report outages to Discord
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+StateDirectory=mail-watch
+LoadCredential=webhook:/etc/mail-watch/webhook
+ExecStart=/usr/local/bin/mail-watch "VPS mail path (probed from the server)" /usr/local/bin/mail-probe vps

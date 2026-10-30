@@ -1,0 +1,9 @@
+[Unit]
+Description=Nextcloud MariaDB dump
+RequiresMountsFor=/srv/data
+After=user@1003.service
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/usr/local/sbin/nc-db-dump.sh

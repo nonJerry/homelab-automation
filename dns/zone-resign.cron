@@ -1,0 +1,2 @@
+# Re-sign every Sunday; the KSK is published as DS at the parent, so expired signatures break LAN resolution.
+17 3 * * 0 root /usr/local/sbin/zone-resign 2>&1 | logger -t zone-resign

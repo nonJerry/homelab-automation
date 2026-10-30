@@ -1,0 +1,45 @@
+#!/bin/bash
+# Install a signed zone staged by the pi and reload the standby resolver.
+# Validates before overwriting: a half-transferred or unsigned file must never
+# replace a working zone.
+set -uo pipefail
+# runuser inherits the caller's cwd; from /home/admin the target user cannot chdir in.
+cd /
+SRC=/home/admin/incoming/example.org.zone.signed
+DST=/opt/subdns/unbound/zones/example.org.zone.signed
+log(){ echo "subdns-zone-install: $*"; }
+
+[ -s "$SRC" ] || { log "no staged zone at $SRC"; exit 1; }
+grep -q 'IN[[:space:]]*SOA'  "$SRC" || { log "no SOA record - refusing"; exit 1; }
+grep -q 'RRSIG'              "$SRC" || { log "not DNSSEC-signed - refusing"; exit 1; }
+
+OLD=$(grep -m1 'IN.*SOA' "$DST" 2>/dev/null | awk '{print $7}' || echo none)
+NEW=$(grep -m1 'IN.*SOA' "$SRC"             | awk '{print $7}')
+log "serial $OLD -> $NEW, $(grep -c . "$SRC") lines"
+
+cp -a "$DST" "$DST.prev" 2>/dev/null || true
+install -o subdns -g subdns -m 644 "$SRC" "$DST"
+chcon -t container_file_t "$DST" 2>/dev/null || restorecon "$DST" 2>/dev/null || true
+
+NCUID=$(id -u subdns)
+# Reload. Neither `podman restart subdns_unbound_1` nor SIGHUP works: the
+# container shares pihole's network namespace (network_mode: service:pihole), so a
+# solo restart cannot rejoin it and crash-loops, and HUP leaves it "state improper".
+# Restarting the whole stack through systemd is the only mechanism that recovers.
+check(){ runuser -u subdns -- env XDG_RUNTIME_DIR=/run/user/$NCUID HOME=/home/subdns \
+    podman exec subdns_unbound_1 dig +short +timeout=2 @127.0.0.1 -p 5335 cloud.example.org \
+    2>/dev/null | grep -q 198.51.100.10; }
+
+runuser -u subdns -- env XDG_RUNTIME_DIR=/run/user/$NCUID HOME=/home/subdns DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$NCUID/bus systemctl --user restart podman-compose@subdns.service
+OK=0; t=0
+while [ $t -lt 90 ]; do sleep 5; t=$((t+5)); if check; then OK=1; break; fi; done
+
+if [ "$OK" = 1 ]; then
+    log "OK - standby serving the new zone (${t}s)"
+    rm -f "$SRC"
+else
+    log "FAILED after ${t}s - rolling back"
+    [ -f "$DST.prev" ] && install -o subdns -g subdns -m 644 "$DST.prev" "$DST"
+    runuser -u subdns -- env XDG_RUNTIME_DIR=/run/user/$NCUID HOME=/home/subdns DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$NCUID/bus systemctl --user restart podman-compose@subdns.service
+    exit 1
+fi
